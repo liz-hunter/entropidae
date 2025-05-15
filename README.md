@@ -147,8 +147,6 @@ sample(virid$`Assembly Accession`, size=1)
 ln -s /hpc/scratch/Elizabeth.Hunter/entropy/db1/fastas/GCA_002916435.2_ASM291643v2_genomic.fna /hpc/scratch/Elizabeth.Hunter/entropy/db1/symlinks/GCA_002916435.2_dup2.fna
 ```
 
-Qwerty1013$#@!
-
 ---------
 
 ## Part B: Format taxonomy files
