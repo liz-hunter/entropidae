@@ -15,11 +15,15 @@ Pull and save lists of accessions from different taxa (Eukaryotes, prokaryotes, 
 
 ### #2 Create bootstrap samples with R (optionally, do some data visualization)
 
-Use samplingwithreplacement.qmd, grab the list of unique accessions for the first sample
+Use samplingwithreplacement.R to output a tsv with the desired number of samples.
 
+Run generate_samples.py to create taxa_sample.txt and taxa_sample_unique.txt on the output from the R script.
+
+```
+python gerenate_samples.py --input taxa_samples.tsv --identifier taxa
+```
 
 ### #3 Download the relevant genomes for each sample 
-
 
 ```
 #!/usr/bin/env bash
