@@ -15,9 +15,9 @@ Pull and save lists of accessions from different taxa (Eukaryotes, prokaryotes, 
 
 ### #2 Create bootstrap samples with R (optionally, do some data visualization)
 
-Use samplingwithreplacement.R to output a tsv with the desired number of samples.
+Use sampling.R to output a tsv with the desired number of bootstrapped samples.
 
-Run generate_samples.py to create taxa_sample.txt and taxa_sample_unique.txt on the output from the R script.
+Run generate_samples.py to create taxa_sample.txt and taxa_sample_unique.txt on the tsv output from the R script with the desired number of samples.
 
 ```
 python gerenate_samples.py --input taxa_samples.tsv --identifier taxa
@@ -25,72 +25,57 @@ python gerenate_samples.py --input taxa_samples.tsv --identifier taxa
 
 ### #3 Download the relevant genomes for each sample 
 
+Split the input (unique) accessions into roughly equal sized batches.
+
+```
+awk -v n=1000 '{print > sprintf("chunk_%d.txt", int((NR-1)/n)+1)}' accessions_unique.txt
+```
+
+For some reason, even with the API key, submitting more than 2 of these at once causes the NCBI API to fail with too many requests. Running 2 at a time, and just setting it up to run when the first one finishes.
+
+
 ```
 #!/usr/bin/env bash
-#SBATCH -J bash
+#SBATCH -J datasets
 #SBATCH -N 1
-#SBATCH -c 5
-#SBATCH --output=%x_%j.out
-
-echo "Starting download"
-date
-
-module load ncbi-datasets-cli/16.27
-
-cd /hpc/scratch/Elizabeth.Hunter/entropy/db1
-datasets download genome accession --inputfile virid_batch1.txt --filename virid_batch1.zip
-
-echo "END"
-date
-```
-
-Could definitely use a big array in the future for maximum parallelization - I think I just had the shebang wrong and that's why this wasn't working.
-
-
-```
-#!/usr/bin/env bash
-
-#SBATCH -J bigdata
-#SBATCH -n 1
 #SBATCH -c 1
-#SBATCH --mem=5G
-#SBATCH --array=1-5
+#SBATCH --array=1-4
 #SBATCH --output=%x_%a_%A.out
 
-echo "START" 
+echo "START"
 date
 
 module load ncbi-datasets-cli/16.27
 
-cd /hpc/scratch/Elizabeth.Hunter/entropy/db1
-FILE=$(sed -n ${SLURM_ARRAY_TASK_ID}p virid_batch1.txt)
+cd $MYPATH/entropy/db_files
 
-echo "Current task ID: ${SLURM_ARRAY_TASK_ID}"
-echo "Accessing FILE: ${FILE}"
+sleep $(( (RANDOM % 5 + 1) * 60 ))
 
-datasets download genome accession --filename ${FILE}.zip ${FILE}
+export NCBI_API_KEY=myapikey123
 
-if [ $? -ne 0 ]; then
-    echo "${FILE} download failed." >> failed_downloads.txt
-else
-    echo "${FILE} downloaded successfully."
-fi
+FILE=$SLURM_ARRAY_TASK_ID
+#FILE=$((SLURM_ARRAY_TASK_ID + 2))
+
+echo "BEGIN DOWNLOAD"
+datasets download genome accession --dehydrated --inputfile chunk_${FILE}.txt --filename batch_${FILE}.zip
+
+echo "BEGIN UNZIP"
+unzip batch_${FILE}.zip -d batch${FILE}
+
+echo "REHYDRATE"
+datasets rehydrate --directory batch${FILE}
+
+echo "CHECK MD5"
+md5sum -c batch${FILE}/md5sum.txt > checks${FILE}.out
 
 echo "END"
 date
-```
-Check the downloads using md5 and unzip (can't multithread decompression)
-
-```
-md5sum -c md5sum.txt > checks.out
-
-unzip batch1.zip
-
 ```
 
 ### #4 Count the number of occurrences of each accession in the full sample list, and generate the appropriate number of symlinks
 
 Use symlinks.sh to do this in one shot
+
 ```
 #!/usr/bin/env bash
 
@@ -144,7 +129,7 @@ sample(virid$`Assembly Accession`, size=1)
 's#GCA_047834745\.1#GCA_002916435\.2#g' accessions.txt
 
 #create individual symlink if needed - use absolute paths
-ln -s /hpc/scratch/Elizabeth.Hunter/entropy/db1/fastas/GCA_002916435.2_ASM291643v2_genomic.fna /hpc/scratch/Elizabeth.Hunter/entropy/db1/symlinks/GCA_002916435.2_dup2.fna
+ln -s $MYPATH/entropy/db1_files/fastas/GCA_002916435.2_ASM291643v2_genomic.fna $MYPATH/entropy/db1/symlinks/GCA_002916435.2_dup2.fna
 ```
 
 ---------
@@ -153,6 +138,7 @@ ln -s /hpc/scratch/Elizabeth.Hunter/entropy/db1/fastas/GCA_002916435.2_ASM291643
 
 ### #1 Download taxonomy files
 
+Grab the taxonomy files (can reuse this for subsequent builds).
 ```
 #!/usr/bin/env bash
 #SBATCH -J bash
@@ -163,24 +149,23 @@ ln -s /hpc/scratch/Elizabeth.Hunter/entropy/db1/fastas/GCA_002916435.2_ASM291643
 echo "START"
 date
 
-cd /hpc/scratch/Elizabeth.Hunter/entropy/
+cd $MYPATH/entropy/
 wget ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz
+wget https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt
+wget https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt
 
 echo "END"
 date
 ```
 
-Can't use tar on the computer nodes yet, unpack it on the headnode. 
+Unpack it the taxdump.
 
 ```
 tar -xvzf taxdump.tar.gz
 ```
 
-Need to create a custom accession2taxid file:
-```wget https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt```
-```wget https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt```
+Concatenate the assembly summaries into all_assembly.txt, and then run this python script to format:
 
-Concatenate these into all_assembly.txt, and then run this python script to format:
 ```
 module load python 3
 python accession2taxid.py
@@ -189,7 +174,7 @@ python accession2taxid.py
 If there are missing accessions in the output, lookup and add taxids to the file (tsv), and then run format_missing.py
 ```python format_missing.py```
 
-Concatenate missing_accession2taxid.map with the other file to create a final key.
+Concatenate missing_accession2taxid.map with the accession2taxid.map to create the final accession2taxid.map file.
 
 ### #2 Rename fastas using the key
 
@@ -199,6 +184,7 @@ python fix_headers.py $MYPATH/entropy/db1_files/test $MYPATH/entropy/test/taxono
 ### #3 Add to library
 
 Using xargs to batch this out. Make sure the CPUS-per-task matches the -P parameter supplied.
+
 ```
 #!/usr/bin/env bash
 #SBATCH -J library
