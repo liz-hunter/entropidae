@@ -205,7 +205,9 @@ echo "END"
 date
 
 ```
-### #3 Build database
+--------------
+
+## 3: Build database
 
 taxonomy directory needs to be inside of the db directory
 
