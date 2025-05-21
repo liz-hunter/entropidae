@@ -1,6 +1,6 @@
 # Genomic Compression and Entropy Workflow
 
-## Part A: Create sample sets for databases
+## Part A: Sampling
 ----------
 **Objective:** collect publicly available genomes from NCBI and create bootstrap samples (with replacement) to determine how the level of representation of different taxa impacts database identifications and performance
 
@@ -134,7 +134,7 @@ ln -s $MYPATH/entropy/db1_files/fastas/GCA_002916435.2_ASM291643v2_genomic.fna $
 
 ---------
 
-## Part B: Format taxonomy files
+## Part B: Taxonomy
 
 ### #1 Download taxonomy files
 
@@ -180,8 +180,15 @@ Concatenate missing_accession2taxid.map with the accession2taxid.map to create t
 
 python fix_headers.py $MYPATH/entropy/db1_files/test $MYPATH/entropy/test/taxonomy/accession2taxid.map
 
- 
-### #3 Add to library
+
+--------------
+
+## Part C: Database
+
+- Make taxonomy directory inside the db directory
+- Move the accession2taxid.map into the db directory
+
+### #1 Add to library
 
 Using xargs to batch this out. Make sure the CPUS-per-task matches the -P parameter supplied.
 
@@ -205,12 +212,8 @@ echo "END"
 date
 
 ```
---------------
 
-## 3: Build database
-
-taxonomy directory needs to be inside of the db directory
-
+### #2 Build the database
 ```
 #!/usr/bin/env bash
 #SBATCH -J build
@@ -229,6 +232,36 @@ kraken2-build --threads 20 --build --max-db-size 483183820800 --db $MYPATH/entro
 
 #483183820800 bytes is about 450Gb, need some room for overhead 
 #took about 62hrs
+
+echo "END"
+date
+```
+
+### #3 Run samples on the newly built database
+
+```
+#!/usr/bin/env bash
+#SBATCH -J kraken2
+#SBATCH -N 1
+#SBATCH -n 20
+#SBATCH --mem=500G
+#SBATCH --array=1-66%10
+#SBATCH --output=%x_%A_%a.out
+
+echo "START"
+date
+module load kraken2/2.1.5
+
+cd $MYPATH/entropy/
+FILE=$(head -n $SLURM_ARRAY_TASK_ID list.txt | tail -n 1)
+
+kraken2 --paired --threads 20 --use-names --report-minimizer-data \
+--gzip-compressed \
+--output $MYPATH/entropy/kraken2_reports/${FILE}_virid1.out \
+--report $MYPATH/entropy/kraken2_reports/${FILE}_report.txt \
+--db $MYPATH/entropy/virid_db1 \
+$MYPATH/metagen/mixtures/${FILE}-1_R1.fastq.gz \
+$MYPATH/metagen/mixtures/${FILE}-1_R2.fastq.gz
 
 echo "END"
 date
