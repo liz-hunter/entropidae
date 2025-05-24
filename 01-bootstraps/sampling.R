@@ -1,6 +1,14 @@
 #Setup and define functions
 library(tidyverse, verbose=FALSE)
 
+setwd("/Users/elizabeth.hunter/Library/CloudStorage/OneDrive-FDA/Documents/current_projects/entropy/accessions")
+
+virid <- read_tsv("accessions/viridiplantae_all_ncbi20250303.tsv", show_col_types = FALSE)
+bac <- read_tsv("accessions/bacteria_all_ncbi20250325.tsv", show_col_types = FALSE)
+archea <- read_tsv("accessions/archea_all_ncbi20250325.tsv", show_col_types = FALSE)
+virus <- read_tsv("accessions/viruses_all_ncbi20250325.tsv", show_col_types = FALSE)
+euk <- read_tsv("accessions/euk_ncbi20250327.tsv", show_col_types = FALSE)
+
 #Function for sampling with replacement ONLY
 grabSR <- function(input, n, t) {
   lapply(1:t, function(i) {
@@ -8,6 +16,7 @@ grabSR <- function(input, n, t) {
     input[sampled_indices, , drop = FALSE]
   })
 }
+
 
 # Function for sampling with replacement AND doing some basic calculations
 # Outputs sample_reduc (just taxids), sample_acc (just accessions), and freq_data
@@ -44,20 +53,6 @@ process_samples <- function(data, n_replicates = 100) {
     freq_data = freq_data
   ))
 }
-
-# Function to grab unique taxid counts for each sample
-get_histogram_data <- function(samples_reduc, category) {
-  counts <- lapply(samples_reduc, function(x) length(unique(x)))
-  counts_vector <- unlist(counts)
-  histogram_data <- data.frame(UniqueCounts = counts_vector, Category = category)
-  return(histogram_data)
-}
-
-virid <- read_tsv("accessions/viridiplantae_all_ncbi20250303.tsv", show_col_types = FALSE)
-bac <- read_tsv("accessions/bacteria_all_ncbi20250325.tsv", show_col_types = FALSE)
-archea <- read_tsv("accessions/archea_all_ncbi20250325.tsv", show_col_types = FALSE)
-virus <- read_tsv("accessions/viruses_all_ncbi20250325.tsv", show_col_types = FALSE)
-euk <- read_tsv("accessions/euk_ncbi20250327.tsv", show_col_types = FALSE)
 
 archea_results <- process_samples(archea, n=100)
 bacteria_results <- process_samples(bac, n=100)

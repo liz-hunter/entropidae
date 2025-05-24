@@ -1,19 +1,21 @@
 # Genomic Compression and Entropy Workflow
 
-## Part A: Sampling
 ----------
+
 **Objective:** collect publicly available genomes from NCBI and create bootstrap samples (with replacement) to determine how the level of representation of different taxa impacts database identifications and performance
 
 **Expectation:** taxa that are more heavily represented will have more consistent identifications in the bootstrapped samples 
 
 ----------
 
+## Part A: Sampling
+
 ### #1 Grab relevant accessions from [NCBI](https://www.ncbi.nlm.nih.gov/datasets/genome/?taxon=1)
 
 Pull and save lists of accessions from different taxa (Eukaryotes, prokaryotes, viruses, Achaea, and Viridiplantae to start)
 
 
-### #2 Create bootstrap samples with R (optionally, do some data visualization)
+### #2 Create bootstrap samples with R
 
 Use sampling.R to output a tsv with the desired number of bootstrapped samples.
 
@@ -74,7 +76,7 @@ date
 
 ### #4 Count the number of occurrences of each accession in the full sample list, and generate the appropriate number of symlinks
 
-Use symlinks.sh to do this in one shot
+Use symlinks.sh to count occurrences and generate symlinks 
 
 ```
 #!/usr/bin/env bash
@@ -138,7 +140,7 @@ ln -s $MYPATH/entropy/db1_files/fastas/GCA_002916435.2_ASM291643v2_genomic.fna $
 
 ### #1 Download taxonomy files
 
-Grab the taxonomy files (can reuse this for subsequent builds).
+Grab the master taxonomy files (can reuse this for subsequent builds).
 ```
 #!/usr/bin/env bash
 #SBATCH -J bash
@@ -158,13 +160,15 @@ echo "END"
 date
 ```
 
-Unpack it the taxdump.
+Unpack the taxdump.
 
 ```
 tar -xvzf taxdump.tar.gz
 ```
 
-Concatenate the assembly summaries into all_assembly.txt, and then run this python script to format:
+Concatenate the assembly summaries into all_assembly.txt
+
+Run accession2taxid.py to format
 
 ```
 module load python 3
@@ -179,7 +183,6 @@ Concatenate missing_accession2taxid.map with the accession2taxid.map to create t
 ### #2 Rename fastas using the key
 
 python fix_headers.py $MYPATH/entropy/db1_files/test $MYPATH/entropy/test/taxonomy/accession2taxid.map
-
 
 --------------
 
