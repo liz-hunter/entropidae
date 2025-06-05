@@ -131,7 +131,7 @@ sample(virid$`Assembly Accession`, size=1)
 's#GCA_047834745\.1#GCA_002916435\.2#g' accessions.txt
 
 #create individual symlink if needed - use absolute paths
-ln -s $MYPATH/entropy/db1_files/fastas/GCA_002916435.2_ASM291643v2_genomic.fna $MYPATH/entropy/db1/symlinks/GCA_002916435.2_dup2.fna
+ln -s full/path/fastas/GCA_002916435.2_ASM291643v2_genomic.fna full/path/symlinks/GCA_002916435.2_dup2.fna
 ```
 
 ---------
