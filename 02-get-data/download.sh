@@ -14,7 +14,7 @@ cd $MYPATH/entropy/db4_files
 
 sleep $(( (RANDOM % 5 + 1) * 60 ))
 
-export NCBI_API_KEY=6d01eef2d417c59746f82f291c5077e27b08
+export NCBI_API_KEY=12345
 
 FILE=$SLURM_ARRAY_TASK_ID
 #FILE=$((SLURM_ARRAY_TASK_ID + 2))
