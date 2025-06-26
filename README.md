@@ -22,7 +22,7 @@ Use sampling.R to output a tsv with the desired number of bootstrapped samples.
 Run generate_samples.py to create taxa_sample.txt and taxa_sample_unique.txt on the tsv output from the R script with the desired number of samples.
 
 ```
-python gerenate_samples.py --input taxa_samples.tsv --identifier taxa
+python generate_samples.py --input taxa_samples.tsv --identifier taxa
 ```
 
 ### #3 Download the relevant genomes for each sample 
@@ -117,7 +117,7 @@ while IFS=$'\t' read -r accession count; do
     fi
 done < accession_counts.tsv
 ```
-Use with wrapper (this takes while, ~4hrs for virid):
+Use with symlink_wrap.sh (this takes while, ~4hrs for virid):
 ```
 bash symlinks.sh accessions.txt filenames.txt fastas/ symlinks/
 ```

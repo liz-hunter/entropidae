@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -J bash
-#SBATCH -N 1
-#SBATCH -c 20
+#SBATCH -c 1
 #SBATCH --output=%x_%j.out
 
 echo "START"

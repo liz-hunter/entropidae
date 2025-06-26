@@ -17,7 +17,6 @@ grabSR <- function(input, n, t) {
   })
 }
 
-
 # Function for sampling with replacement AND doing some basic calculations
 # Outputs sample_reduc (just taxids), sample_acc (just accessions), and freq_data
 # freq_data gives counts for each taxid, how many were present originally and how many were sampled in the bootstrap experiment

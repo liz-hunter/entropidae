@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 #SBATCH -J datasets
-#SBATCH -N 1
 #SBATCH -c 1
 #SBATCH --array=1-2
 #SBATCH --output=%x_%a_%A.out
@@ -10,7 +9,7 @@ date
 
 module load ncbi-datasets-cli/16.27
 
-cd $MYPATH/entropy/db4_files
+cd $MYPATH/db_files
 
 sleep $(( (RANDOM % 5 + 1) * 60 ))
 
