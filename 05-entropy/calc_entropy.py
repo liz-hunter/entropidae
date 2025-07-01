@@ -7,6 +7,7 @@ from collections import defaultdict
 TAXDUMP_DIR = Path("$MYPATH/entropy/accession2taxid_masters/tax")  # contains nodes.dmp
 SUMMARY_DIR = Path("$MYPATH/entropy/kraken2_analysis/summaries")  # *_virid_summary.txt files
 OUTPUT_DIR = Path("$MYPATH/entropy/kraken2_analysis/entropy")  # where to write scored outputs
+DB_NAME = "virid"  # Name of the database used in Kraken2
 
 # Load NCBI Taxonomy
 def load_taxonomy(nodes_file):
@@ -22,7 +23,8 @@ def load_taxonomy(nodes_file):
             rank[tax_id] = rank_name
     return parent, rank
 
-# Traverse tax tree to root
+# Grab lineage for a given taxid
+# Returns a list of taxids from the root to the given taxid
 def get_lineage(taxid, parent_map):
     lineage = []
     while taxid in parent_map and taxid != parent_map[taxid]:
@@ -47,8 +49,8 @@ def tax_distance(t1, t2, parent_map):
 # Analyze a single summary file
 def analyze_summary_file(file_path, parent_map):
     df = pd.read_csv(file_path, sep="\t", dtype=str)
-    base = file_path.stem.replace("_virid_summary", "")
-    tax_columns = [col for col in df.columns if col.startswith("virid")]
+    base = file_path.stem.replace(f"_{DB_NAME}_summary", "")
+    tax_columns = [col for col in df.columns if col.startswith(DB_NAME)]
     n_reads = len(df)
 
     # Per-read scores
@@ -98,7 +100,7 @@ def analyze_summary_file(file_path, parent_map):
         dist_col = f"dist{col[-1]}"
         col_vals = per_read_df[dist_col].dropna().astype(float)
         row_summary = {
-            "sample_virid": f"{base}_{col}",
+            f"sample_{DB_NAME}": f"{base}_{col}",
             "mean": col_vals.mean(),
             "median": col_vals.median(),
             "q25": col_vals.quantile(0.25),
@@ -117,13 +119,13 @@ def run_taxonomic_distance_scoring():
     parent_map, rank_map = load_taxonomy(TAXDUMP_DIR / "nodes.dmp")
 
     all_summaries = []
-    for summary_file in sorted(SUMMARY_DIR.glob("*_virid_summary.txt")):
+    for summary_file in sorted(SUMMARY_DIR.glob(f"*_{DB_NAME}_summary.txt")):
         print(f"Processing: {summary_file.name}")
         file_summary = analyze_summary_file(summary_file, parent_map)
         all_summaries.extend(file_summary)
 
     # Save global summary
     summary_df = pd.DataFrame(all_summaries)
-    summary_df.to_csv(OUTPUT_DIR / "taxdist_summary_all_samples.tsv", sep="\t", index=False)
+    summary_df.to_csv(OUTPUT_DIR / f"full_summary_{DB_NAME}.tsv", sep="\t", index=False)
 
 run_taxonomic_distance_scoring()
