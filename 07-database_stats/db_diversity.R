@@ -1,3 +1,184 @@
+library(tidyverse)
+library(vegan)
+library(readr)
+library(taxonomizr)
+library(gtools)
+
+# something weird is going on here bc there are 6255 samples in virid but we sampled 6257, but it's a later problem
+# maybe use the euk taxonomy or refseq virid to try and chase down the 2 entries
+#acc_sp <- read_tsv("/projects/handy_grp/liz_working/entropy/data_summaries/db_accessions.tsv")
+#sample <- unique(unlist(acc_sp))
+#ref <- all_virid %>% select('Assembly Accession')
+#ref <- unique(ref$`Assembly Accession`)
+#missing_values <- setdiff(ref, sample)
+
+# load in database tsv
+taxid_sp <- read_tsv("/flash/storage/scratch/Elizabeth.Hunter/entropy/keys/db_comp/combined_taxid_symlinklist.tsv")
+all_virid = read_tsv("/flash/storage/scratch/Elizabeth.Hunter/entropy/keys/viridiplantae_all_ncbi20250303.tsv", col_names=TRUE) 
+sql_path <- "/projects/handy_grp/taxonomizr20250305/accessionTaxa.sql"
+
+# grab higher level taxonomy
+taxid_gen <- as.data.frame(lapply(taxid_sp, function(col) {
+  taxonomy <- getTaxonomy(col, sql_path, desiredTaxa = "genus", getNames = FALSE)
+  taxonomy[, "genus"]
+}))
+
+taxid_fam <- as.data.frame(lapply(taxid_sp, function(col) {
+  taxonomy <- getTaxonomy(col, sql_path, desiredTaxa = "family", getNames = FALSE)
+  taxonomy[, "family"]
+}))
+
+# create a list
+taxid_levels <- list(
+  species = taxid_sp,
+  genus = taxid_gen,
+  family = taxid_fam
+)
+
+# calculate basic metrics
+calc_diversity <- function(df, level_name) {
+  lapply(names(df), function(colname) {
+    vec <- df[[colname]]
+    freq_table <- table(vec)
+    
+    data.frame(
+      Database = colname,
+      Level = level_name,
+      Shannon = diversity(freq_table, index = "shannon"),
+      Simpson = diversity(freq_table, index = "simpson"),
+      Richness = length(unique(vec))
+    )
+  }) %>% bind_rows()
+}
+
+# Combine metrics for all levels
+diversity_df <- bind_rows(
+  lapply(names(taxid_levels), function(level) {
+    calc_diversity(taxid_levels[[level]], level)
+  })
+)
+
+diversity_long <- diversity_df %>%
+  pivot_longer(cols = c("Shannon", "Simpson", "Richness"),
+               names_to = "Metric", values_to = "Value")
+
+diversity_long$Database <- factor(diversity_long$Database,
+                                  levels = mixedsort(unique(diversity_long$Database)))
+
+diversity_long$Level <- factor(diversity_long$Level,
+                               levels = c("species", "genus", "family"))
+
+nice_colors <- c(
+  species = "#E69F00",
+  genus   = "#56B4E9",
+  family  = "#009E73"
+)
+
+ggplot(diversity_long, aes(x = Database, y = Value, fill = Level)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  facet_wrap(~Metric, scales = "free_y") +
+  scale_fill_manual(values = nice_colors) +
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "right",
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5),
+    plot.title.position = "plot"   
+  ) +
+  labs(
+    title = "Diversity Metrics by Database & Taxonomic Level",
+    y = "Diversity Value",
+    fill = "Rank"
+  )
+
+# compare the databases to the overarching virid dataset
+sample_stat <- function(master, samples_df) {
+  # Master taxid frequencies (with duplicates)
+  master_taxids <- master$`Organism Taxonomic ID`
+  master_freq <- as.data.frame(table(master_taxids), stringsAsFactors = FALSE)
+  colnames(master_freq) <- c("taxid", "Master_Freq")
+  
+  # Initialize storage
+  taxid_stats_list <- list()
+  summary_stats_list <- list()
+  
+  for (sample_name in colnames(samples_df)) {
+    sample_taxids <- samples_df[[sample_name]]
+    sample_taxids <- sample_taxids[!is.na(sample_taxids)]
+    
+    # Frequency of taxids in sample
+    sample_freq <- as.data.frame(table(sample_taxids), stringsAsFactors = FALSE)
+    colnames(sample_freq) <- c("taxid", "Sample_Freq")
+    
+    # Merge master and sample
+    merged <- merge(master_freq, sample_freq, by = "taxid", all = TRUE)
+    merged[is.na(merged)] <- 0
+    
+    # Add proportions
+    merged$Proportion_In_Master <- merged$Master_Freq / sum(master_freq$Master_Freq)
+    merged$Proportion_In_Sample <- merged$Sample_Freq / sum(sample_freq$Sample_Freq)
+    
+    # Store per-sample taxid stats
+    taxid_stats_list[[sample_name]] <- merged
+    
+    # Summary stats for this sample
+    sample_stats <- data.frame(
+      sample = sample_name,
+      total_taxids_in_sample = length(sample_taxids),
+      unique_taxids_in_sample = length(unique(sample_taxids)),
+      total_taxids_in_master = length(master_taxids),
+      unique_taxids_in_master = length(unique(master_taxids)),
+      richness_prop = length(unique(sample_taxids)) / length(unique(master_taxids)),
+      percent_taxids_shared = mean(merged$Sample_Freq > 0)  # proportion of master taxids present in sample
+    )
+    
+    summary_stats_list[[sample_name]] <- sample_stats
+  }
+  
+  # Combine summary stats into one df
+  summary_stats_df <- do.call(rbind, summary_stats_list)
+  
+  return(list(
+    taxid_stats = taxid_stats_list,
+    summary_stats = summary_stats_df
+  ))
+}
+
+metrics <- sample_stat(all_virid, taxid_sp)
+metrics$summary_stats
+
+# samples reduc comes out of this function
+process_samples <- function(samples_df, accession_df = NULL) {
+  # List of taxids per sample
+  samples_reduc <- lapply(samples_df, function(col) col[!is.na(col)])
+  
+  # Optional: list of accessions per sample
+  samples_acc <- NULL
+  if (!is.null(accession_df)) {
+    samples_acc <- lapply(accession_df, function(col) col[!is.na(col)])
+  }
+  
+  # Combine all taxids from all samples and compute frequency
+  all_taxids <- unlist(samples_reduc)
+  sample_freq <- as.data.frame(table(all_taxids), stringsAsFactors = FALSE)
+  colnames(sample_freq) <- c("Value", "Sampled_Count")
+  
+  # Return result in the expected format
+  return(list(
+    samples_reduc = samples_reduc,
+    samples_acc = samples_acc,
+    freq_data = sample_freq
+  ))
+}
+
+# function to grab unique taxid counts for each sample
+get_histogram_data <- function(samples_reduc, category) {
+  counts <- lapply(samples_reduc, function(x) length(unique(x)))
+  counts_vector <- unlist(counts)
+  histogram_data <- data.frame(UniqueCounts = counts_vector, Category = category)
+  return(histogram_data)
+}
+
 # Stats 
 freq <- virid_results$freq_data
 
@@ -137,3 +318,6 @@ ggplot(combined_histogram_data, aes(x = UniqueCounts, fill = Category)) +
   geom_text(data = annotation_data, 
             aes(x = x, y = 35, label = label4),
             color = "red", size = 4)
+
+
+

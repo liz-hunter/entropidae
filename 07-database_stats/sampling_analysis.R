@@ -1,9 +1,43 @@
-# Function to grab unique taxid counts for each sample
-get_histogram_data <- function(samples_reduc, category) {
-  counts <- lapply(samples_reduc, function(x) length(unique(x)))
-  counts_vector <- unlist(counts)
-  histogram_data <- data.frame(UniqueCounts = counts_vector, Category = category)
-  return(histogram_data)
+library(tidyverse)
+
+# function to do some basic  doing some basic calculations
+# Outputs sample_reduc (just taxids), sample_acc (just accessions), and freq_data
+# freq_data gives counts for each taxid, how many were present originally and how many were sampled in the bootstrap experiment
+process_samples <- function(data, sampled_data) {
+
+  # Rename and select relevant columns
+  data <- data %>%
+    rename(taxid = `Organism Taxonomic ID`,
+           accession = `Assembly Accession`) %>%
+    select(taxid, accession)
+  
+  sampled_data <- sampled_data %>%
+    rename(taxid = `Organism Taxonomic ID`,
+           accession = `Assembly Accession`) %>%
+    select(taxid, accession)
+  
+  # Frequency table for original data
+  original_freq <- data %>%
+    count(taxid, name = "Original_Count")
+  
+  # Frequency table for sampled data
+  sampled_freq <- sampled_data %>%
+    count(taxid, name = "Sampled_Count")
+  
+  # Merge frequencies, fill NAs with 0
+  freq_data <- full_join(original_freq, sampled_freq, by = "taxid") %>%
+    mutate(across(everything(), ~replace_na(.x, 0)))
+  
+  # Extract lists of taxid/accession from sampled data
+  samples_taxid <- sampled_data$taxid
+  samples_accession <- sampled_data$accession
+  
+  # Return results
+  return(list(
+    samples_taxid = samples_taxid,
+    samples_accession = samples_accession,
+    freq_data = freq_data
+  ))
 }
 
 # Stats 
@@ -145,6 +179,3 @@ ggplot(combined_histogram_data, aes(x = UniqueCounts, fill = Category)) +
   geom_text(data = annotation_data, 
             aes(x = x, y = 35, label = label4),
             color = "red", size = 4)
-
-
-

@@ -9,7 +9,7 @@ archea <- read_tsv("accessions/archea_all_ncbi20250325.tsv", show_col_types = FA
 virus <- read_tsv("accessions/viruses_all_ncbi20250325.tsv", show_col_types = FALSE)
 euk <- read_tsv("accessions/euk_ncbi20250327.tsv", show_col_types = FALSE)
 
-#Function for sampling with replacement ONLY
+#Function for sampling with replacement
 grabSR <- function(input, n, t) {
   lapply(1:t, function(i) {
     sampled_indices <- sample(seq_len(nrow(input)), n, replace = TRUE)
@@ -17,42 +17,47 @@ grabSR <- function(input, n, t) {
   })
 }
 
-# Function for sampling with replacement AND doing some basic calculations
+# Function for doing some basic calculations on the sampled table
 # Outputs sample_reduc (just taxids), sample_acc (just accessions), and freq_data
 # freq_data gives counts for each taxid, how many were present originally and how many were sampled in the bootstrap experiment
-process_samples <- function(data, n_replicates = 100) {
-  library(dplyr)
+process_samples <- function(data, sampled_data) {
   
-  # Select relevant columns
-  data <- data %>% select(taxid = `Organism Taxonomic ID`, `Assembly Accession`)
-  data_reduc <- data %>% select(taxid)
+  # Rename and select relevant columns
+  data <- data %>%
+    rename(taxid = `Organism Taxonomic ID`,
+           accession = `Assembly Accession`) %>%
+    select(taxid, accession)
   
-  # Sample with replacement
-  samples <- grabSR(data, n = nrow(data), t = n_replicates)
+  sampled_data <- sampled_data %>%
+    rename(taxid = `Organism Taxonomic ID`,
+           accession = `Assembly Accession`) %>%
+    select(taxid, accession)
   
-  # Extract sampled columns
-  samples_reduc <- lapply(samples, `[[`, "taxid")
-  samples_acc <- lapply(samples, `[[`, "Assembly Accession")
+  # Frequency table for original data
+  original_freq <- data %>%
+    count(taxid, name = "Original_Count")
   
-  # Frequency calculations
-  original_freq <- as.data.frame(table(data_reduc))
-  colnames(original_freq) <- c("Value", "Original_Count")
+  # Frequency table for sampled data
+  sampled_freq <- sampled_data %>%
+    count(taxid, name = "Sampled_Count")
   
-  sample_freq <- as.data.frame(table(unlist(samples_reduc)))
-  colnames(sample_freq) <- c("Value", "Sampled_Count")
+  # Merge frequencies, fill NAs with 0
+  freq_data <- full_join(original_freq, sampled_freq, by = "taxid") %>%
+    mutate(across(everything(), ~replace_na(.x, 0)))
   
-  # Merge frequency counts
-  freq_data <- merge(original_freq, sample_freq, by = "Value", all = TRUE)
-  freq_data[is.na(freq_data)] <- 0
+  # Extract lists of taxid/accession from sampled data
+  samples_taxid <- sampled_data$taxid
+  samples_accession <- sampled_data$accession
   
-  # Return results as a list
+  # Return results
   return(list(
-    samples_reduc = samples_reduc,
-    samples_acc = samples_acc,
+    samples_taxid = samples_taxid,
+    samples_accession = samples_accession,
     freq_data = freq_data
   ))
 }
 
+# need to fix this - pulled grabSR out of process_samples to improve downstream flexibility
 archea_results <- process_samples(archea, n=100)
 bacteria_results <- process_samples(bac, n=100)
 virid_results <- process_samples(virid, n=100)
