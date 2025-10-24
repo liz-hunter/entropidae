@@ -1,7 +1,7 @@
 #Setup and define functions
 library(tidyverse, verbose=FALSE)
 
-setwd("/Users/elizabeth.hunter/Library/CloudStorage/OneDrive-FDA/Documents/current_projects/entropy/accessions")
+setwd("/current_projects/entropy/accessions")
 
 virid <- read_tsv("accessions/viridiplantae_all_ncbi20250303.tsv", show_col_types = FALSE)
 bac <- read_tsv("accessions/bacteria_all_ncbi20250325.tsv", show_col_types = FALSE)
