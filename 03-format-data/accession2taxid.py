@@ -39,7 +39,7 @@ with open(missing_output_file, "w") as f:
     for acc in sorted(missing_accessions):
         f.write(f"{acc}\n")
 
-print(f"✅ Done! Wrote {len(accession_to_info)} entries to {output_file}")
-print(f"⚠️  {len(missing_accessions)} accessions from {accessions_file} were not found in {assembly_summary_file}")
-print(f"📄 Missing accessions written to {missing_output_file}")
+print(f"Done! Wrote {len(accession_to_info)} entries to {output_file}")
+print(f"{len(missing_accessions)} accessions from {accessions_file} were not found in {assembly_summary_file}")
+print(f"Missing accessions written to {missing_output_file}")
 
