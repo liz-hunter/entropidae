@@ -8,7 +8,7 @@
 
 ----------
 
-## Part A: Sampling (external)
+## Part A: Sampling
 
 ### #1 Retrieve and Clean Up Accessions
 
