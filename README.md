@@ -8,55 +8,172 @@
 
 ----------
 
-## Part A: Sampling
+## Part A: Sampling (external)
 
-### #1 Grab relevant accessions from [NCBI](https://www.ncbi.nlm.nih.gov/datasets/genome/?taxon=1)
+### #1 Retrieve and Clean Up Accessions
 
-Pull and save lists of accessions from different taxa (Eukaryotes, prokaryotes, viruses, Achaea, and Viridiplantae to start)
+#### Grab relevant accessions from [NCBI](https://www.ncbi.nlm.nih.gov/datasets/genome/?taxon=1)
 
+Retrieve a table of accessions from taxonomic groups of interest (ex. Viridiplantae, Enterobacteriaceae, etc.) from the NCBI genome browser.
 
-### #2 Create bootstrap samples with R
+The following columns are required:
+  - Assembly Name
+  - Assembly Accession
+  - Assembly Paired Assembly Accession
+  - Organism Name
+  - Organism Taxonomic ID
 
-Use sampling.R to output a tsv with the desired number of bootstrapped samples.
-
-Run generate_samples.py to create taxa_sample.txt and taxa_sample_unique.txt on the tsv output from the R script with the desired number of samples.
-
-```
-python generate_samples.py --input taxa_samples.tsv --identifier taxa
-```
-
-### #3 Download the relevant genomes for each sample 
-
-Split the input (unique) accessions into roughly equal sized batches.
+#### Run clean_up.R wrapper to remove RefSeq/Genbank duplicates, and organellar genomes
 
 ```
-awk -v n=1000 '{print > sprintf("chunk_%d.txt", int((NR-1)/n)+1)}' accessions_unique.txt
+Rscript clean_up.R <input_list.tsv> [output_cleaned_list.tsv] \
+                    [--remove-organellar] [--quiet-organellar] [--no-report]
+```
+*Arguments:*
+input_list.tsv  
+Input genome metadata table (TSV from NCBI genome browser)
+
+output_cleaned_list.tsv (optional)
+Output cleaned table (default: <input_basename>_cleaned.tsv, written to the same directory as the input)
+
+*Options:*
+--remove-organellar
+Remove rows flagged as organellar (mitochondria, plastid, chloroplast, apicoplast)
+--quiet-organellar
+Do not print the organellar warning/list (still detects and removes if enabled)
+--no-report
+Suppress cleanup summary and removed-row reports
+
+*Example:*
+```
+Rscript clean_up.R mydataset_accessions.tsv --remove-organellar
 ```
 
-For some reason, even with the API key, submitting more than 2 of these at once causes the NCBI API to fail with too many requests. Running 2 at a time, and just setting it up to run when the first one finishes.
+#### Run bootstraps.R wrapper to generate bootstrap genome databases
+
+```
+Rscript bootstraps.R --in <cleaned.tsv> --n_boot <int> --label <string> \
+[--seed <int>] [--outdir DIR] \
+[--outputs composite,files,unique_files,accession_counts,taxid_counts] \
+[--quiet]
+```
+
+*Arguments:*
+--in  
+Cleaned TSV with columns: accession, name, taxid
+
+--n_boot  
+Number of bootstrap samples (with replacement)
+
+--label  
+String used for naming outputs (e.g., plants)
+
+*Options:*
+--seed  
+Integer seed for reproducible sampling
+
+--outdir  
+Output directory (default: {label}_boot)
+
+--outputs  
+Comma-separated outputs to produce (reduces from default).  
+Allowed: composite, files, unique_files, accession_counts, taxid_counts  
+Default (if omitted): ALL outputs
+
+--quiet  
+Suppress progress messages (still errors on invalid input)
+
+*Example:*
+```
+Rscript bootstraps.R --in virid_cleaned.tsv --n_boot 10 --label mydataset --seed 1234
+```
+
+#### Optional: Run diversity_metrics.R wrapper to compute taxonomic diversity metrics on the bootstraps
+
+```
+Rscript diversity_metrics.R --label <string> [--bootdir DIR] [--taxids FILE] [--out FILE]
+[--plots] [--plots_outdir DIR] [--plot_metrics m1,m2,...] [--quiet]
+```
+
+*Arguments:*
+--label  
+String used during bootstrapping (must match bootstrap naming)
+
+*Options:*
+--bootdir  
+Bootstrap directory (default: {label}_boot)
+
+--taxids  
+Composite taxid matrix (default: {bootdir}/composite_{label}_taxids.tsv)
+
+--out  
+Output diversity summary table (default: {label}_metrics/diversity_{label}_summary.tsv)
+
+--plots  
+Generate diversity metric plots (one bar per database, faceted by metric)
+
+--plots_outdir  
+Directory for plots (default: {label}_metrics)
+
+--plot_metrics  
+Comma-separated metrics to include in plots  
+Default: n_unique_taxa,shannon,gini_simpson,inverse_simpson,pielou_evenness
+
+--quiet  
+Suppress progress messages
+
+*Example:*
+```
+Rscript diversity_metrics.R --label mydataset
+```
 
 
+### #2 Retrieve data from NCBI using ncbi-datasets
+
+mydataset_boot/mydataset_db[1-n]_unique.txt contains the unique taxids contained in each bootstrapped sample. 
+
+You can retrieve the data in a linear way, or optionally chunk the accessions into blocks of n rows, to run in a parallel or serial manner.
+
+*Split accession list into chunks:*
+```
+awk -v n=1000 '{print > sprintf("mydataset_%d.txt", int((NR-1)/n)+1)}' mydataset_db[1-n]_unique.txt
+```
+
+*Recommendations for successful retrieval of large datasets:*
+- Use an NCBI API key
+- Stagger calls by using random sleep intervals 
+- Run a maximum of two download jobs in parallel at a time, more will fail with a "too many calls" error from NCBI
+- Ensure you have enough memory, depending on your dataset this can be a huge download 
+
+*Basic ncbi-datasets script:*
+```
+datasets download genome accession --dehydrated --inputfile mydataset.txt --filename mydataset.zip
+unzip mydataset.zip -d mydataset
+datasets rehydrate --directory mydataset
+md5sum -c mydataset/md5sum.txt > checks.out
+```
+
+*Example HPC array with checks:*
 ```
 #!/usr/bin/env bash
 #SBATCH -J datasets
 #SBATCH -N 1
 #SBATCH -c 1
-#SBATCH --array=1-4
+#SBATCH --array=1-4%2
 #SBATCH --output=%x_%a_%A.out
 
 echo "START"
 date
 
-module load ncbi-datasets-cli/16.27
+module load ncbi-datasets-cli/16.27 # sub with your own ncbi-datasets install
 
-cd $MYPATH/entropy/db_files
+cd $MYPATH/mydataset_boot/
 
 sleep $(( (RANDOM % 5 + 1) * 60 ))
 
-export NCBI_API_KEY=myapikey123
+export NCBI_API_KEY=myapikey123 # sub with your NCBI_API_KEY (or remove/configure globally)
 
 FILE=$SLURM_ARRAY_TASK_ID
-#FILE=$((SLURM_ARRAY_TASK_ID + 2))
 
 echo "BEGIN DOWNLOAD"
 datasets download genome accession --dehydrated --inputfile chunk_${FILE}.txt --filename batch_${FILE}.zip
@@ -74,7 +191,7 @@ echo "END"
 date
 ```
 
-### #4 Count the number of occurrences of each accession in the full sample list, and generate the appropriate number of symlinks
+### #3 Generate symlinks for library build
 
 Use symlinks.sh to count occurrences and generate symlinks 
 
@@ -142,22 +259,9 @@ ln -s full/path/fastas/GCA_002916435.2_ASM291643v2_genomic.fna full/path/symlink
 
 Grab the master taxonomy files (can reuse this for subsequent builds).
 ```
-#!/usr/bin/env bash
-#SBATCH -J bash
-#SBATCH -N 1
-#SBATCH -c 20
-#SBATCH --output=%x_%j.out
-
-echo "START"
-date
-
-cd $MYPATH/entropy/
 wget ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz
 wget https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt
 wget https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt
-
-echo "END"
-date
 ```
 
 Unpack the taxdump.
