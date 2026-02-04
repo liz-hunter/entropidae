@@ -30,6 +30,7 @@ Rscript clean_up.R <input_list.tsv> [output_cleaned_list.tsv] \
                     [--remove-organellar] [--quiet-organellar] [--no-report]
 ```
 *Arguments:*
+
 input_list.tsv  
 Input genome metadata table (TSV from NCBI genome browser)
 
@@ -37,6 +38,7 @@ output_cleaned_list.tsv (optional)
 Output cleaned table (default: <input_basename>_cleaned.tsv, written to the same directory as the input)
 
 *Options:*
+
 --remove-organellar
 Remove rows flagged as organellar (mitochondria, plastid, chloroplast, apicoplast)
 --quiet-organellar
@@ -59,6 +61,7 @@ Rscript bootstraps.R --in <cleaned.tsv> --n_boot <int> --label <string> \
 ```
 
 *Arguments:*
+
 --in  
 Cleaned TSV with columns: accession, name, taxid
 
@@ -69,6 +72,7 @@ Number of bootstrap samples (with replacement)
 String used for naming outputs (e.g., plants)
 
 *Options:*
+
 --seed  
 Integer seed for reproducible sampling
 
@@ -96,10 +100,12 @@ Rscript diversity_metrics.R --label <string> [--bootdir DIR] [--taxids FILE] [--
 ```
 
 *Arguments:*
+
 --label  
 String used during bootstrapping (must match bootstrap naming)
 
 *Options:*
+
 --bootdir  
 Bootstrap directory (default: {label}_boot)
 
