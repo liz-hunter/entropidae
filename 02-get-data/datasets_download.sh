@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH -J datasets
 #SBATCH -c 1
-#SBATCH --array=1-2
+#SBATCH --array=1-4%2
 #SBATCH --output=%x_%a_%A.out
 
 echo "START"
@@ -9,14 +9,13 @@ date
 
 module load ncbi-datasets-cli/16.27
 
-cd $MYPATH/db_files
+cd $MYPATH/entropy
 
 sleep $(( (RANDOM % 5 + 1) * 60 ))
 
 export NCBI_API_KEY=12345
 
 FILE=$SLURM_ARRAY_TASK_ID
-#FILE=$((SLURM_ARRAY_TASK_ID + 2))
 
 echo "BEGIN DOWNLOAD"
 datasets download genome accession --dehydrated --inputfile chunk_${FILE}.txt --filename batch_${FILE}.zip

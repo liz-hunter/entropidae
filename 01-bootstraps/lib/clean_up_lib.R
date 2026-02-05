@@ -161,8 +161,7 @@ cleanup_summary <- function(df_input,
   invisible(NULL)
 }
 
-# End-to-end cleanup: optionally remove organellar genomes, always dedupe pairs,
-# and return the 3-column table used downstream.
+# End-to-end cleanup, outputs a nice formatted final table
 clean_assembly_list <- function(infile,
                                 warn_organellar = TRUE,
                                 remove_organellar = FALSE,
@@ -204,6 +203,8 @@ clean_assembly_list <- function(infile,
     transmute(
       accession = assembly_accession,
       name      = organism_name,
-      taxid     = organism_taxonomic_id
+      taxid     = organism_taxonomic_id,
+      filename  = paste0(assembly_accession, "_", assembly_name, "_genomic.fna")
     )
+
 }

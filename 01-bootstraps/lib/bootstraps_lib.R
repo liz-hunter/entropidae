@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
-allowed_outputs <- c("composite", "files", "unique_files", "accession_counts", "taxid_counts")
+allowed_outputs <- c("composite", "files", "unique_files", "accession_counts", "taxid_counts", "all_accessions")
 
 sanitize_label <- function(label) {
   label %>%
@@ -30,14 +30,14 @@ read_cleaned_input <- function(infile) {
   if (!file.exists(infile)) stop("Input file does not exist: ", infile, call. = FALSE)
 
   df <- read_tsv(infile, show_col_types = FALSE)
-  needed <- c("accession", "name", "taxid")
+  needed <- c("accession", "name", "taxid", "filename")
   missing_cols <- setdiff(needed, names(df))
   if (length(missing_cols) > 0) {
     stop("Missing required column(s) in cleaned input: ", paste(missing_cols, collapse = ", "), call. = FALSE)
   }
 
   lookup <- df %>%
-    select(accession, name, taxid) %>%
+    select(accession, name, taxid, filename) %>%
     distinct(accession, .keep_all = TRUE)
 
   n <- nrow(lookup)
@@ -81,6 +81,16 @@ ensure_outdir <- function(outdir) {
   normalizePath(outdir, winslash = "/", mustWork = FALSE)
 }
 
+write_all_accessions <- function(mat_acc, outdir, label_safe) {
+  # master unique list across ALL bootstraps (union of all columns)
+  all_acc <- sort(unique(c(mat_acc)))
+
+  out_path <- file.path(outdir, paste0(label_safe, "_all_accessions.txt"))
+  writeLines(all_acc, con = out_path, sep = "\n")
+
+  list(path = out_path, accessions = all_acc)
+}
+
 write_composites <- function(mat_acc, mat_tax, outdir, label_safe) {
   composite_acc_path <- file.path(outdir, paste0("composite_", label_safe, "_samples.tsv"))
   composite_tax_path <- file.path(outdir, paste0("composite_", label_safe, "_taxids.tsv"))
@@ -122,6 +132,7 @@ write_accession_count_tables <- function(lookup, idx, n_boot, outdir, label_safe
   accessions <- lookup$accession
   taxids     <- lookup$taxid
   names_vec  <- lookup$name
+  filenames  <- lookup$filename
   n <- length(accessions)
 
   paths <- character(n_boot)
@@ -133,9 +144,10 @@ write_accession_count_tables <- function(lookup, idx, n_boot, outdir, label_safe
 
     out <- tibble(
       accession = accessions[ids],
-      name = names_vec[ids],
-      taxid = taxids[ids],
-      count = as.integer(t)
+      name      = names_vec[ids],
+      taxid     = taxids[ids],
+      filename  = filenames[ids],
+      count     = as.integer(t)
     ) %>%
       arrange(desc(count), accession)
 
@@ -213,6 +225,13 @@ run_bootstraps <- function(infile,
   if ("unique_files" %in% outputs) {
     results$unique_bootstrap_files <- write_unique_bootstrap_files(mat_acc, outdir_norm, label_safe)
     if (verbose) cat("Wrote ", length(results$unique_bootstrap_files), " unique-accession list files to: ", outdir_norm, "\n", sep = "")
+  }
+
+  if ("all_accessions" %in% outputs) {
+    aa <- write_all_accessions(mat_acc, outdir_norm, label_safe)
+    results$all_accessions_file <- aa$path
+    results$all_accessions <- aa$accessions
+    if (verbose) cat("Wrote master all-accessions list: ", aa$path, " (", length(aa$accessions), " unique)\n", sep = "")
   }
 
   if ("accession_counts" %in% outputs) {

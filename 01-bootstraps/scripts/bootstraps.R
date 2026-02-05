@@ -95,7 +95,7 @@ if (str_trim(label) == "") {
 
 if (!is.null(outdir) && str_trim(outdir) == "") outdir <- NULL
 
-# source lib relative to this script's location (needed for allowed_outputs)
+# source lib relative to this script's location
 get_script_dir <- function() {
   cmd_args <- commandArgs(trailingOnly = FALSE)
   file_arg <- "--file="
